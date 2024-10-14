@@ -23,7 +23,7 @@ import static org.junit.Assert.assertTrue;
 import org.jopenray.util.ByteArrayListWithHeader;
 import org.junit.Test;
 
-import sun.misc.HexDumpEncoder;
+import org.jopenray.util.HexDumpEncoder;
 
 public class ByteArrayListWithHeaderTest {
 

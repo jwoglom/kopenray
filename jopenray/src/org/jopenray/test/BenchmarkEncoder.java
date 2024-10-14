@@ -32,7 +32,7 @@ import org.jopenray.server.thinclient.BitmapEncoder;
 import org.jopenray.server.thinclient.DisplayMessage;
 import org.jopenray.server.thinclient.DisplayWriterThread;
 
-import com.sun.xml.internal.messaging.saaj.util.ByteOutputStream;
+import java.io.ByteArrayOutputStream;
 
 public class BenchmarkEncoder {
 	static long totalL = 0;
@@ -61,12 +61,12 @@ public class BenchmarkEncoder {
 			}
 
 			System.setOut(new PrintStream(new BufferedOutputStream(
-					new ByteOutputStream(1000000))));
+					new ByteArrayOutputStream(1000000))));
 			for (int i = 0; i < ims.length; i++) {
 				long t1 = System.nanoTime();
 				long l1 = totalL;
 				BufferedImage image = ims[i];
-				encoder.encode(image, 0, 0);
+				encoder.encode(image, 0, 0, false);
 				long t2 = System.nanoTime();
 				long l2 = totalL;
 				int pixels = image.getWidth() * image.getHeight();
