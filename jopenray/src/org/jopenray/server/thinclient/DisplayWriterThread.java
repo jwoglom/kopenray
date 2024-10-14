@@ -106,7 +106,9 @@ public class DisplayWriterThread extends Thread {
 
 			if (m != null) {
 				try {
-					m.send(client);
+					synchronized (m) {
+						m.send(client);
+					}
 					totalBytesToSend -= m.getLength();
 					counter += m.getLength();
 

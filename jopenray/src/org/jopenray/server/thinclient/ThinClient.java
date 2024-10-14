@@ -388,7 +388,10 @@ public class ThinClient {
 	public void sendBytes(byte[] buffer, int bufferLength) throws IOException {
 		DatagramPacket dataSent = new DatagramPacket(buffer, 0, bufferLength,
 				getServer(), getServerPort());
-		getSocket().send(dataSent);
+
+		synchronized (socket) {
+			socket.send(dataSent);
+		}
 
 	}
 
