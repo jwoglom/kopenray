@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="kOpenRay" type="AntRunConfiguration">
+    <antsettings antfile="file://$PROJECT_DIR$/jopenray/build.xml" target="dist" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
