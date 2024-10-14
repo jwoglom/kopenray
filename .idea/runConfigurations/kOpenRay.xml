@@ -2,7 +2,10 @@
   <configuration default="false" name="kOpenRay" type="AntRunConfiguration">
     <antsettings antfile="file://$PROJECT_DIR$/jopenray/build.xml" target="dist" />
     <method v="2">
+      <option name="AntTarget" enabled="true" antfile="file://$PROJECT_DIR$/jopenray/build.xml" target="clean" />
+      <option name="AntTarget" enabled="true" antfile="file://$PROJECT_DIR$/jopenray/build.xml" target="compile" />
       <option name="Make" enabled="true" />
+      <option name="AntTarget" enabled="true" antfile="file://$PROJECT_DIR$/jopenray/build.xml" target="dist" />
     </method>
   </configuration>
 </component>

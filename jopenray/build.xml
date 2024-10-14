@@ -6,7 +6,7 @@
 
 	<target name="compile">
 		<mkdir dir="${build}" />
-		<javac debug="true" srcdir="${src}" destdir="${build}" includes="lib/**" includeantruntime="false">
+		<javac debug="true" srcdir="${src}" destdir="${build}" includes="lib/**" includeantruntime="false" source="1.8" target="1.8">
 			<include name="**"/>
 			<exclude name="org/jopenray/test/**"/>
 			<compilerarg value="-Xlint:deprecation"/>
