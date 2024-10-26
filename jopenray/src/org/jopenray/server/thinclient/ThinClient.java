@@ -389,9 +389,7 @@ public class ThinClient {
 		DatagramPacket dataSent = new DatagramPacket(buffer, 0, bufferLength,
 				getServer(), getServerPort());
 
-		synchronized (socket) {
-			socket.send(dataSent);
-		}
+		socket.send(dataSent);
 
 	}
 

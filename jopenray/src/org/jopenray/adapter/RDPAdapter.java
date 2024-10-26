@@ -419,6 +419,10 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
+			} else {
+				if (counter % 100 == 0) {
+					logger.info("repaint count=" + counter);
+				}
 			}
 		} catch (Exception e) {
 			System.out.println("RDPAdapter.repaint():" + x + "," + y + " "
