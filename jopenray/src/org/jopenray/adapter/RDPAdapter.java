@@ -22,6 +22,7 @@ package org.jopenray.adapter;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Graphics;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
@@ -216,10 +217,10 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 
 			setRdp5PerformanceFlags(Rdp.RDP5_NO_CURSOR_SHADOW
 									| Rdp.RDP5_NO_CURSORSETTINGS
-									//| Rdp.RDP5_NO_FULLWINDOWDRAG
+									| Rdp.RDP5_NO_FULLWINDOWDRAG
 									| Rdp.RDP5_NO_MENUANIMATIONS
-									//| Rdp.RDP5_NO_THEMING
-									//| Rdp.RDP5_NO_WALLPAPER
+									| Rdp.RDP5_NO_THEMING
+									| Rdp.RDP5_NO_WALLPAPER
 					);
 
 
@@ -501,6 +502,12 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 		}
 	}
 
+	boolean shiftDown = false;
+	boolean ctrlDown = false;
+	boolean altDown = false;
+	boolean metaDown = false;
+	boolean altGrDown = false;
+
 	@Override
 	public void keyPressed(int key, boolean shift, boolean ctrl, boolean alt,
 						   boolean meta, boolean altGr) {
@@ -524,6 +531,11 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 			logger.info("keyPressed_SPECIAL(" + key + ", " + Integer.toHexString(key) + ", " + (char)key + ", sc="+sc+", " +(shift ? ", shift" : "") + (ctrl ? ", ctrl" : "") + (alt ? ", alt" : "") + (meta ? ", meta" : "") + (altGr? ", altGr" : "") + ")");
 		} else {
 			logger.info("keyPressed(" + key + ", " + Integer.toHexString(key) + ", " + (char)key + ", sc="+sc+", " +(shift ? ", shift" : "") + (ctrl ? ", ctrl" : "") + (alt ? ", alt" : "") + (meta ? ", meta" : "") + (altGr? ", altGr" : "") + ")");
+			if (shift) { shiftDown=true; getInput().sendScancode(t, RDP_KEYPRESS, RDPKeymap.getScancode(KeyEvent.VK_SHIFT)); }
+			if (ctrl) { ctrlDown=true; getInput().sendScancode(t, RDP_KEYPRESS, RDPKeymap.getScancode(KeyEvent.VK_CONTROL)); }
+			if (alt) { altDown=true; getInput().sendScancode(t, RDP_KEYPRESS, RDPKeymap.getScancode(KeyEvent.VK_ALT)); }
+			if (meta) { metaDown=true; getInput().sendScancode(t, RDP_KEYPRESS, RDPKeymap.getScancode(KeyEvent.VK_META)); }
+			if (altGr) { altGrDown=true; getInput().sendScancode(t, RDP_KEYPRESS, RDPKeymap.getScancode(KeyEvent.VK_ALT_GRAPH)); }
 			getInput().sendScancode(t, RDP_KEYPRESS, sc);
 		}
 	}
@@ -552,11 +564,16 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 		int sc = RDPKeymap.getScancode(key);
 		long t = getInput().getTime();
 
-		if (getInput().handleSpecialKeys(t, e, true)) {
+		if (getInput().handleSpecialKeys(t, e, false)) {
 			logger.info("keyReleased_SPECIAL(" + key + ", " + Integer.toHexString(key) + ", " + (char)key + ", sc="+sc+")");
 		} else {
 			logger.info("keyReleased(" + key + ", " + Integer.toHexString(key) + ", " + (char)key + ", sc="+sc+")");
 			getInput().sendScancode(t, RDP_KEYRELEASE, sc);
+			if (shiftDown) { shiftDown=false; getInput().sendScancode(t, RDP_KEYRELEASE, RDPKeymap.getScancode(KeyEvent.VK_SHIFT)); }
+			if (ctrlDown) { ctrlDown=false; getInput().sendScancode(t, RDP_KEYRELEASE, RDPKeymap.getScancode(KeyEvent.VK_CONTROL)); }
+			if (altDown) { altDown=false; getInput().sendScancode(t, RDP_KEYRELEASE, RDPKeymap.getScancode(KeyEvent.VK_ALT)); }
+			if (metaDown) { metaDown=false; getInput().sendScancode(t, RDP_KEYRELEASE, RDPKeymap.getScancode(KeyEvent.VK_META)); }
+			if (altGrDown) { altGrDown=false; getInput().sendScancode(t, RDP_KEYRELEASE, RDPKeymap.getScancode(KeyEvent.VK_ALT_GRAPH)); }
 		}
 	}
 

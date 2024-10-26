@@ -177,6 +177,9 @@ public class RDPKeymap {
             case KeyEvent.VK_ALT:
                 scancode = 56;
                 break;
+            case KeyEvent.VK_ALT_GRAPH:
+                scancode = 128 + 56;
+                break;
             case KeyEvent.VK_SPACE:
                 scancode = 57;
                 break;
