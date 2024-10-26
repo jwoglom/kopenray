@@ -18,6 +18,7 @@
 				<pathelement path="lib/hamcrest-core-1.3.jar" />
 				<pathelement path="lib/jsch-0.2.20.jar" />
 				<pathelement path="lib/bcprov-jdk18on-1.78.1.jar" />
+				<pathelement path="lib/elusiva-java-rdp.jar" />
 			</classpath>
 		</javac>
 	</target>
@@ -32,6 +33,7 @@
 			<zipfileset src="lib/hamcrest-core-1.3.jar" />
 			<zipfileset src="lib/jsch-0.2.20.jar" />
 			<zipfileset src="lib/bcprov-jdk18on-1.78.1.jar" />
+			<zipfileset src="lib/elusiva-java-rdp.jar" />
 			<manifest>
 				<attribute name="Main-Class" value="org.jopenray.server.OpenRayServer" />
 			</manifest>
