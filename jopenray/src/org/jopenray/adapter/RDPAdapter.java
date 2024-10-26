@@ -35,15 +35,14 @@ import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Vector;
+import java.util.*;
 
 import javax.imageio.ImageIO;
 
 import com.elusiva.rdp.*;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
+import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.jopenray.operation.SetMouseCursorOperation;
 
@@ -57,6 +56,8 @@ import org.jopenray.server.thinclient.DisplayMessage;
 import org.jopenray.server.thinclient.InputListener;
 import org.jopenray.server.thinclient.ThinClient;
 import org.jopenray.util.Util;
+
+import static java.awt.event.KeyEvent.KEY_LOCATION_UNKNOWN;
 
 public class RDPAdapter extends RdesktopCanvas implements InputListener {
 
@@ -78,7 +79,7 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 	static Logger logger = Logger.getLogger("org.jopenray");
 
 	static final String keyMapPath = "Keymaps/";
-	private static final boolean DEBUG_REPAINT = false;
+	private static final boolean DEBUG_REPAINT = getEnv("DEBUG_REPAINT").equals("true");
 
 	static String mapFile = "en-us";
 
@@ -87,9 +88,7 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 	private ThinClient client;
 	private Session session;
 
-	Rdp5 rdp = null;
-
-	Input input;
+	Rdp5 rdp5 = null;
 
 	private boolean stopped;
 	private KeyCode_FileBased_Localised keyMap;
@@ -105,7 +104,14 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 
 		// Logger configuration
 		BasicConfigurator.configure();
-		logger.setLevel(Level.INFO);
+		if (getEnv("DEBUG_LOG").equals("true")) {
+			logger.setLevel(Level.DEBUG);
+			LogManager.getRootLogger().setLevel(Level.DEBUG);
+		} else {
+			logger.setLevel(Level.INFO);
+			LogManager.getRootLogger().setLevel(Level.INFO);
+		}
+
 
 		String server = session.getServer();
 		int logonflags = Rdp.RDP_LOGON_NORMAL;
@@ -156,9 +162,9 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 
 		option.disableFullScreen();
 
-		Common.rdp = rdp;
 
 		// Configure a keyboard layout
+		option.setMapFile(mapFile);
 		keyMap = null;
 		try {
 			// logger.info("looking for: " + "/" + keyMapPath + mapFile);
@@ -166,8 +172,9 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 					+ keyMapPath + mapFile);
 			// logger.info("istr = " + istr);
 			if (istr == null) {
-				logger.info("Loading keymap from filename");
-				keyMap = new KeyCode_FileBased_Localised(keyMapPath + mapFile, option);
+				String fn = keyMapPath + option.getMapFile();
+				logger.info("Loading keymap from filename: " + fn);
+				keyMap = new KeyCode_FileBased_Localised(fn, option);
 			} else {
 				logger.info("Loading keymap from InputStream");
 				keyMap = new KeyCode_FileBased_Localised(istr, option);
@@ -190,13 +197,14 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 		logger.debug("keep_running = " + keep_running);
 		{
 			logger.debug("Initialising RDP layer...");
-			rdp = new Rdp5(channels, option);
-			Common.rdp = rdp;
+			rdp5 = new Rdp5(channels, option);
+			rdp = rdp5;
+			Common.rdp = rdp5;
+			logger.debug("Registering keyboard...");
+			registerKeyboard(keyMap);
+			option.setKeylayout(keyMap.getMapCode());
 			logger.debug("Registering drawing surface...");
 			rdp.registerDrawingSurface(this);
-			logger.debug("Registering comms layer...");
-			// // window.registerCommLayer(rdp);
-			input = new Input_Localised(this, rdp, keyMap, option);
 
 			readytosend = false;
 			logger
@@ -205,6 +213,15 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 
 			if (server.equalsIgnoreCase("localhost"))
 				server = "127.0.0.1";
+
+			setRdp5PerformanceFlags(Rdp.RDP5_NO_CURSOR_SHADOW
+									| Rdp.RDP5_NO_CURSORSETTINGS
+									//| Rdp.RDP5_NO_FULLWINDOWDRAG
+									| Rdp.RDP5_NO_MENUANIMATIONS
+									//| Rdp.RDP5_NO_THEMING
+									//| Rdp.RDP5_NO_WALLPAPER
+					);
+
 
 			if (rdp != null) {
 				// Attempt to connect to server on port Options.port
@@ -218,13 +235,13 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 						 * encrypted login packet but unencrypted transfer of
 						 * other packets
 						 */
-						if (option.isPacketEncryptionNotEnabled())
-							option.disableEncryption();
+						option.disablePacketEncryption();
+						option.disableEncryption();
 
 						logger.info("Connection successful");
 						// now show window after licence negotiation
 						EventManager.getInstance().add(
-								new Event("RDP Connection successfull to "
+								new Event("RDP Connection successful to "
 										+ server, displayClient.getName()
 										+ "connected to " + server,
 										Event.TYPE_INFO));
@@ -414,6 +431,11 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 	}
 
 	@Override
+	public Graphics getGraphics() {
+		return getBackstore().getGraphics();
+	}
+
+	@Override
 	public synchronized void addMouseListener(MouseListener l) {
 		System.out.println("RDPAdapter.addMouseListener()" + l);
 
@@ -482,68 +504,39 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 	@Override
 	public void keyPressed(int key, boolean shift, boolean ctrl, boolean alt,
 			boolean meta, boolean altGr) {
-		// Deprecated
-/*
-		KeyEvent e = new KeyEvent(this, KeyEvent.KEY_PRESSED, System
-				.currentTimeMillis(), 0, key);
-*/
-		KeyEvent e = new KeyEvent(this, KeyEvent.KEY_PRESSED, System
-				.currentTimeMillis(), 0, key,
-				KeyEvent.CHAR_UNDEFINED);
+		if (getInput() == null) return;
+		long time = getInput().getTime();
 
-		input.lastKeyEvent = e;
-		input.modifiersValid = true;
-		long time = input.getTime();
+		getPressedKeys().addElement(key);
+		int modifiers = 0;
+		KeyEvent e = new KeyEvent(this, KeyEvent.KEY_PRESSED, System.currentTimeMillis(), modifiers, key, (char)key);
+		getInput().lastKeyEvent = e;
+		int sc = keyMap.getScancode(e);
+		logger.info("keyPressed(" + key + ", " + Integer.toHexString(key) + ", " + (char)key + ", mod="+modifiers+", sc="+sc+", " +(shift ? ", shift" : "") + (ctrl ? ", ctrl" : "") + (alt ? ", alt" : "") + (meta ? ", meta" : "") + (altGr? ", altGr" : "") + ") - time=" + time);
 
-		// Some java versions have keys that don't generate keyPresses -
-		// here we add the key so we can later check if it happened
-		getPressedKeys().addElement(Integer.valueOf(e.getKeyCode()));
 
-		logger.info("PRESSED keychar='" + e.getKeyChar() + "' keycode=0x"
-				+ Integer.toHexString(e.getKeyCode()) + " char='"
-				+ ((char) e.getKeyCode()) + "'");
-
-		if (rdp != null) {
-
-			long t = input.getTime();
-
-			input.sendScancode(t, RDP_KEYPRESS, keyMap.getScancode(e));
-
+		if (!getInput().handleSpecialKeys(time, e, true)) {
+			getInput().sendScancode(time, RDP_KEYPRESS, sc);
 		}
 
 	}
 
 	@Override
 	public void keyReleased(int key) {
-		// Deprecated
-/*
-		KeyEvent e = new KeyEvent(this, KeyEvent.KEY_RELEASED, System
-				.currentTimeMillis(), 0, key);
-*/
-		KeyEvent e = new KeyEvent(this, KeyEvent.KEY_RELEASED, System
-				.currentTimeMillis(), 0, key,
-				KeyEvent.CHAR_UNDEFINED);
-		// Some java versions have keys that don't generate keyPresses -
-		// we added the key to the vector in keyPressed so here we check for
-		// it
-		Integer keycode = new Integer(e.getKeyCode());
-		if (!getPressedKeys().contains(keycode)) {
-			keyPressed(key, false, false, false, false, false);
+		if (getInput() == null) return;
+		long time = getInput().getTime();
+
+		if (!getPressedKeys().contains(key)) {
+			this.keyPressed(key, false, false, false, false, false);
 		}
+		getPressedKeys().removeElement(key);
+		KeyEvent e = new KeyEvent(this, KeyEvent.KEY_RELEASED, System.currentTimeMillis(), 0, key, (char)key);
+		getInput().lastKeyEvent = e;
+		int sc = keyMap.getScancode(e);
+		logger.info("keyReleased(" + key + ", " + Integer.toHexString(key) + ", " + (char)key + ", sc="+sc+") - time=" + time);
 
-		getPressedKeys().removeElement(keycode);
-
-		input.lastKeyEvent = e;
-		input.modifiersValid = true;
-		long time = input.getTime();
-
-		logger.info("RELEASED keychar='" + e.getKeyChar() + "' keycode=0x"
-				+ Integer.toHexString(e.getKeyCode()) + " char='"
-				+ ((char) e.getKeyCode()) + "'");
-		if (rdp != null) {
-			long t = input.getTime();
-
-			input.sendScancode(t, RDP_KEYRELEASE, keyMap.getScancode(e));
+		if (!getInput().handleSpecialKeys(time, e, false)) {
+			getInput().sendScancode(time, RDP_KEYRELEASE, sc);
 		}
 
 	}
@@ -751,7 +744,7 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 		try {
 			pressedKeysField = Input.class.getDeclaredField("pressedKeys");
 			pressedKeysField.setAccessible(true);
-			return ((Vector)pressedKeysField.get(input));
+			return ((Vector)pressedKeysField.get(getInput()));
 		} catch (NoSuchFieldException | IllegalAccessException e) {
 			throw new RuntimeException(e);
 		}
@@ -766,5 +759,23 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 		} catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+
+	private void setRdp5PerformanceFlags(int flag) {
+		Field flags = null;
+		try {
+			flags = Options.class.getDeclaredField("rdp5_performanceflags");
+			flags.setAccessible(true);
+			flags.set(option, flag);
+		} catch (IllegalAccessException | NoSuchFieldException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	private static String getEnv(String key) {
+		String val = System.getenv(key);
+		if (val == null) return "";
+		return val;
 	}
 }
