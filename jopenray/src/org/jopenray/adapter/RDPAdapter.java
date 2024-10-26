@@ -29,35 +29,27 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Vector;
 
 import javax.imageio.ImageIO;
 
+import com.elusiva.rdp.*;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.jopenray.operation.CopyOperation;
-import org.jopenray.operation.FillOperation;
 import org.jopenray.operation.SetMouseCursorOperation;
-import org.jopenray.rdp.Common;
-import org.jopenray.rdp.ConnectionException;
-import org.jopenray.rdp.Constants;
-import org.jopenray.rdp.Input;
-import org.jopenray.rdp.Options;
-import org.jopenray.rdp.RDPCanvas;
-import org.jopenray.rdp.RDPError;
-import org.jopenray.rdp.RDPKeymap;
-import org.jopenray.rdp.RdesktopException;
-import org.jopenray.rdp.Rdp;
-import org.jopenray.rdp.keymapping.KeyCodeFileBased;
-import org.jopenray.rdp.orders.BoundsOrder;
-import org.jopenray.rdp.rdp5.Rdp5;
-import org.jopenray.rdp.rdp5.VChannels;
-import org.jopenray.rdp.rdp5.cliprdr.ClipChannel;
+
+import com.elusiva.rdp.rdp5.Rdp5;
+import com.elusiva.rdp.rdp5.VChannels;
+import com.elusiva.rdp.rdp5.cliprdr.ClipChannel;
 import org.jopenray.server.event.Event;
 import org.jopenray.server.event.EventManager;
 import org.jopenray.server.session.Session;
@@ -66,7 +58,7 @@ import org.jopenray.server.thinclient.InputListener;
 import org.jopenray.server.thinclient.ThinClient;
 import org.jopenray.util.Util;
 
-public class RDPAdapter extends RDPCanvas implements InputListener {
+public class RDPAdapter extends RdesktopCanvas implements InputListener {
 
 	protected static final int MOUSE_FLAG_MOVE = 0x0800;
 	protected static final int MOUSE_FLAG_BUTTON1 = 0x1000;
@@ -100,14 +92,13 @@ public class RDPAdapter extends RDPCanvas implements InputListener {
 	Input input;
 
 	private boolean stopped;
+	private KeyCode_FileBased_Localised keyMap;
 
-	public RDPAdapter() {
-		super();
+	public RDPAdapter(ThinClient displayClient) {
+		super(displayClient.getScreenWidth(), displayClient.getScreenHeight(), new Options());
 	}
 
 	public void start(ThinClient displayClient, Session session) {
-		init(displayClient.getScreenWidth(), displayClient.getScreenHeight());
-
 		this.stopped = false;
 		this.client = displayClient;
 		this.session = session;
@@ -120,13 +111,13 @@ public class RDPAdapter extends RDPCanvas implements InputListener {
 		int logonflags = Rdp.RDP_LOGON_NORMAL;
 
 		VChannels channels = new VChannels();
-		ClipChannel clipChannel = new ClipChannel();
+		ClipChannel clipChannel = new ClipChannel(option);
 		// Initialise all RDP5 channels
-		if (Options.use_rdp5) {
+		if (option.shouldUseRdp5()) {
 			// TODO: implement all relevant channels
-			if (Options.map_clipboard)
+			if (option.isClipboardMappingEnabled())
 				try {
-					channels.register(clipChannel);
+					channels.register(clipChannel, option);
 				} catch (RdesktopException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
@@ -139,7 +130,7 @@ public class RDPAdapter extends RDPCanvas implements InputListener {
 		String osvers = System.getProperty("os.version");
 
 		if (os.equals("Windows 2000") || os.equals("Windows XP"))
-			Options.built_in_licence = true;
+			option.enableBuiltInLicence();
 
 		logger.info("Operating System is " + os + " version " + osvers);
 
@@ -151,39 +142,39 @@ public class RDPAdapter extends RDPCanvas implements InputListener {
 			Constants.OS = Constants.MAC;
 
 		if (Constants.OS == Constants.MAC)
-			Options.caps_sends_up_and_down = false;
-		Options.width = displayClient.getScreenWidth();
-		Options.height = displayClient.getScreenHeight();
+			option.disableCapsSendsUpAndDown();
+		option.setWidth(displayClient.getScreenWidth());
+		option.setHeight(displayClient.getScreenHeight());
 
-		Options.username = session.getLogin();
+		option.setUsername(session.getLogin());
 
 		final String password = session.getPassword();
 		if (password != null && password.trim().length() > 0) {
 			logonflags |= Rdp.RDP_LOGON_AUTO;
-			Options.password = password;
+			option.setPassword(password);
 		}
 
-		Options.fullscreen = false;
+		option.disableFullScreen();
 
 		Common.rdp = rdp;
 
 		// Configure a keyboard layout
-		KeyCodeFileBased keyMap = null;
+		keyMap = null;
 		try {
 			// logger.info("looking for: " + "/" + keyMapPath + mapFile);
-			InputStream istr = RDPError.class.getResourceAsStream("/"
+			InputStream istr = KeyCode_FileBased_Localised.class.getResourceAsStream("/"
 					+ keyMapPath + mapFile);
 			// logger.info("istr = " + istr);
 			if (istr == null) {
 				logger.info("Loading keymap from filename");
-				keyMap = new KeyCodeFileBased(keyMapPath + mapFile);
+				keyMap = new KeyCode_FileBased_Localised(keyMapPath + mapFile, option);
 			} else {
 				logger.info("Loading keymap from InputStream");
-				keyMap = new KeyCodeFileBased(istr);
+				keyMap = new KeyCode_FileBased_Localised(istr, option);
 			}
 			if (istr != null)
 				istr.close();
-			Options.keylayout = keyMap.getMapCode();
+			option.setKeylayout(keyMap.getMapCode());
 		} catch (Exception kmEx) {
 			EventManager.getInstance().add(
 					new Event("Keymap not loaded", kmEx.getMessage(),
@@ -199,17 +190,17 @@ public class RDPAdapter extends RDPCanvas implements InputListener {
 		logger.debug("keep_running = " + keep_running);
 		{
 			logger.debug("Initialising RDP layer...");
-			rdp = new Rdp5(channels);
+			rdp = new Rdp5(channels, option);
 			Common.rdp = rdp;
 			logger.debug("Registering drawing surface...");
-			rdp.registerSurface(this);
+			rdp.registerDrawingSurface(this);
 			logger.debug("Registering comms layer...");
 			// // window.registerCommLayer(rdp);
-			input = new Input(this, rdp, keyMap);
+			input = new Input_Localised(this, rdp, keyMap, option);
 
 			readytosend = false;
 			logger
-					.info("Connecting to " + server + ":" + Options.port
+					.info("Connecting to " + server + ":" + option.getPort()
 							+ " ...");
 
 			if (server.equalsIgnoreCase("localhost"))
@@ -218,10 +209,7 @@ public class RDPAdapter extends RDPCanvas implements InputListener {
 			if (rdp != null) {
 				// Attempt to connect to server on port Options.port
 				try {
-					rdp.connect(Options.username,
-							InetAddress.getByName(server), logonflags,
-							Options.domain, Options.password, Options.command,
-							Options.directory);
+					rdp.connect(InetAddress.getByName(server), logonflags);
 
 					if (keep_running) {
 
@@ -230,8 +218,8 @@ public class RDPAdapter extends RDPCanvas implements InputListener {
 						 * encrypted login packet but unencrypted transfer of
 						 * other packets
 						 */
-						if (!Options.packet_encryption)
-							Options.encryption = false;
+						if (option.isPacketEncryptionNotEnabled())
+							option.disableEncryption();
 
 						logger.info("Connection successful");
 						// now show window after licence negotiation
@@ -241,20 +229,19 @@ public class RDPAdapter extends RDPCanvas implements InputListener {
 										+ "connected to " + server,
 										Event.TYPE_INFO));
 
-						rdp.mainLoop(deactivated, ext_disc_reason, this);
+						rdp.mainLoop(deactivated, ext_disc_reason);
 
 						if (deactivated[0]) {
 							/* clean disconnect */
 							rdp.disconnect();
 						} else {
-							if (ext_disc_reason[0] == RDPError.exDiscReasonAPIInitiatedDisconnect
-									|| ext_disc_reason[0] == RDPError.exDiscReasonAPIInitiatedLogoff) {
+							if (ext_disc_reason[0] == DisconnnectCodeMapper.exDiscReasonAPIInitiatedDisconnect
+									|| ext_disc_reason[0] == DisconnnectCodeMapper.exDiscReasonAPIInitiatedLogoff) {
 								rdp.disconnect();
 							}
 
 							if (ext_disc_reason[0] >= 2) {
-								String reason = RDPError
-										.getMessageFromDisconnectError(ext_disc_reason[0]);
+								String reason = getTextDisconnectReason(ext_disc_reason[0]);
 								EventManager.getInstance().add(
 										new Event("Connection terminated",
 												reason, Event.TYPE_WARNING));
@@ -351,15 +338,15 @@ public class RDPAdapter extends RDPCanvas implements InputListener {
 		super.drawLineVerticalHorizontal(x1, y1, x2, y2, color, opcode);
 	}
 
-	@Override
-	public void backFill(int x, int y, int cx, int cy, int color) {
-		// TODO Auto-generated method stub
-
-		DisplayMessage m = new DisplayMessage(client.getWriter());
-		m.addOperation(new FillOperation(x, y, cx, cy, new Color(color)));
-		this.client.getWriter().addMessage(m);
-		// super.fillRectangle(x, y, cx, cy, color);
-	}
+//	@Override
+//	public void backFill(int x, int y, int cx, int cy, int color) {
+//		// TODO Auto-generated method stub
+//
+//		DisplayMessage m = new DisplayMessage(client.getWriter());
+//		m.addOperation(new FillOperation(x, y, cx, cy, new Color(color)));
+//		this.client.getWriter().addMessage(m);
+//		// super.fillRectangle(x, y, cx, cy, color);
+//	}
 
 	@Override
 	public void update(Graphics g) {
@@ -403,7 +390,7 @@ public class RDPAdapter extends RDPCanvas implements InputListener {
 		}
 		counter++;
 		try {
-			BufferedImage image = backstore.getSubimage(x, y, width, height);
+			BufferedImage image = getBackstore().getSubimage(x, y, width, height);
 
 			this.client.getWriter().sendImage(image, x, y);
 			if (DEBUG_REPAINT) {
@@ -424,22 +411,6 @@ public class RDPAdapter extends RDPCanvas implements InputListener {
 
 		// super.repaint(x, y, width, height);
 
-	}
-
-	@Override
-	public void setClip(BoundsOrder bounds) {
-		this.top = bounds.getTop();
-		this.left = bounds.getLeft();
-		this.right = bounds.getRight();
-		this.bottom = bounds.getBottom();
-	}
-
-	@Override
-	public void resetClip() {
-		this.top = 0;
-		this.left = 0;
-		this.right = this.width - 1; // changed
-		this.bottom = this.height - 1; // changed
 	}
 
 	@Override
@@ -526,7 +497,7 @@ public class RDPAdapter extends RDPCanvas implements InputListener {
 
 		// Some java versions have keys that don't generate keyPresses -
 		// here we add the key so we can later check if it happened
-		input.pressedKeys.addElement(Integer.valueOf(e.getKeyCode()));
+		getPressedKeys().addElement(Integer.valueOf(e.getKeyCode()));
 
 		logger.info("PRESSED keychar='" + e.getKeyChar() + "' keycode=0x"
 				+ Integer.toHexString(e.getKeyCode()) + " char='"
@@ -536,7 +507,7 @@ public class RDPAdapter extends RDPCanvas implements InputListener {
 
 			long t = input.getTime();
 
-			input.sendScancode(t, RDP_KEYPRESS, RDPKeymap.getScancode(key));
+			input.sendScancode(t, RDP_KEYPRESS, keyMap.getScancode(e));
 
 		}
 
@@ -556,11 +527,11 @@ public class RDPAdapter extends RDPCanvas implements InputListener {
 		// we added the key to the vector in keyPressed so here we check for
 		// it
 		Integer keycode = new Integer(e.getKeyCode());
-		if (!input.pressedKeys.contains(keycode)) {
+		if (!getPressedKeys().contains(keycode)) {
 			keyPressed(key, false, false, false, false, false);
 		}
 
-		input.pressedKeys.removeElement(keycode);
+		getPressedKeys().removeElement(keycode);
 
 		input.lastKeyEvent = e;
 		input.modifiersValid = true;
@@ -572,20 +543,20 @@ public class RDPAdapter extends RDPCanvas implements InputListener {
 		if (rdp != null) {
 			long t = input.getTime();
 
-			input.sendScancode(t, RDP_KEYRELEASE, RDPKeymap.getScancode(key));
+			input.sendScancode(t, RDP_KEYRELEASE, keyMap.getScancode(e));
 		}
 
 	}
 
-	@Override
-	public void blit(int x, int y, int w, int h, int srcx, int srcy) {
-		// System.out.println("Blit:" + x + "," + y + " " + w + "x" + h +
-		// " from "
-		// + srcx + "," + srcy);
-		DisplayMessage m = new DisplayMessage(client.getWriter());
-		m.addOperation(new CopyOperation(x, y, w, h, srcx, srcy));
-		this.client.getWriter().addMessage(m);
-	}
+//	@Override
+//	public void blit(int x, int y, int w, int h, int srcx, int srcy) {
+//		// System.out.println("Blit:" + x + "," + y + " " + w + "x" + h +
+//		// " from "
+//		// + srcx + "," + srcy);
+//		DisplayMessage m = new DisplayMessage(client.getWriter());
+//		m.addOperation(new CopyOperation(x, y, w, h, srcx, srcy));
+//		this.client.getWriter().addMessage(m);
+//	}
 
 	@Override
 	public void displayImage(int[] data, int w, int h, int x, int y, int cx,
@@ -762,5 +733,38 @@ public class RDPAdapter extends RDPCanvas implements InputListener {
 		m.addOperation(op);
 		this.client.getWriter().addMessage(m);
 
+	}
+
+	private WrappedImage getBackstore() {
+        Field backstoreField = null;
+        try {
+            backstoreField = RdesktopCanvas.class.getDeclaredField("backstore");
+			backstoreField.setAccessible(true);
+			return ((WrappedImage)backstoreField.get(this));
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+	private Vector getPressedKeys() {
+		Field pressedKeysField = null;
+		try {
+			pressedKeysField = Input.class.getDeclaredField("pressedKeys");
+			pressedKeysField.setAccessible(true);
+			return ((Vector)pressedKeysField.get(input));
+		} catch (NoSuchFieldException | IllegalAccessException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	private String getTextDisconnectReason(int reason) {
+		Method textDisconnectReason = null;
+		try {
+			textDisconnectReason = DisconnnectCodeMapper.class.getDeclaredMethod("textDisconnectReason", int.class);
+			textDisconnectReason.setAccessible(true);
+			return (String) textDisconnectReason.invoke(null, reason);
+		} catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+			throw new RuntimeException(e);
+		}
 	}
 }

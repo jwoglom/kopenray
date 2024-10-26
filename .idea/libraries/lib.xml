@@ -5,6 +5,9 @@
       <root url="jar://$PROJECT_DIR$/jopenray/lib/jdom.jar!/" />
       <root url="jar://$PROJECT_DIR$/jopenray/lib/hamcrest-core-1.3.jar!/" />
       <root url="jar://$PROJECT_DIR$/jopenray/lib/junit-4.13.2.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jopenray/lib/jsch-0.2.20.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jopenray/lib/bcprov-jdk18on-1.78.1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jopenray/lib/elusiva-java-rdp.jar!/" />
     </CLASSES>
     <JAVADOC />
     <SOURCES />

@@ -309,7 +309,7 @@ public class ThinClient {
 			thread.interrupt();
 		}
 		thread = new Thread() {
-			RDPAdapter t = new RDPAdapter();
+			RDPAdapter t = new RDPAdapter(ThinClient.this);
 
 			@Override
 			public void run() {

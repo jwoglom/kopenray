@@ -1,9 +1,0 @@
-<component name="libraryTable">
-  <library name="kOpenRay">
-    <CLASSES>
-      <root url="jar://$PROJECT_DIR$/kOpenray_a1/kOpenRay/kOpenRay.jar!/" />
-    </CLASSES>
-    <JAVADOC />
-    <SOURCES />
-  </library>
-</component>
