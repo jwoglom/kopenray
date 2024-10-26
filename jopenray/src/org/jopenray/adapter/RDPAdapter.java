@@ -503,42 +503,61 @@ public class RDPAdapter extends RdesktopCanvas implements InputListener {
 
 	@Override
 	public void keyPressed(int key, boolean shift, boolean ctrl, boolean alt,
-			boolean meta, boolean altGr) {
-		if (getInput() == null) return;
-		long time = getInput().getTime();
+						   boolean meta, boolean altGr) {
+		if (rdp == null) return;
 
-		getPressedKeys().addElement(key);
-		int modifiers = 0;
-		KeyEvent e = new KeyEvent(this, KeyEvent.KEY_PRESSED, System.currentTimeMillis(), modifiers, key, (char)key);
+		KeyEvent e = new KeyEvent(this, KeyEvent.KEY_PRESSED, System
+				.currentTimeMillis(), 0, key,
+				KeyEvent.CHAR_UNDEFINED);
+
 		getInput().lastKeyEvent = e;
-		int sc = keyMap.getScancode(e);
-		logger.info("keyPressed(" + key + ", " + Integer.toHexString(key) + ", " + (char)key + ", mod="+modifiers+", sc="+sc+", " +(shift ? ", shift" : "") + (ctrl ? ", ctrl" : "") + (alt ? ", alt" : "") + (meta ? ", meta" : "") + (altGr? ", altGr" : "") + ") - time=" + time);
+		getInput().modifiersValid = true;
 
+		// Some java versions have keys that don't generate keyPresses -
+		// here we add the key so we can later check if it happened
+		getPressedKeys().addElement(Integer.valueOf(e.getKeyCode()));
 
-		if (!getInput().handleSpecialKeys(time, e, true)) {
-			getInput().sendScancode(time, RDP_KEYPRESS, sc);
+		int sc = RDPKeymap.getScancode(key);
+		long t = getInput().getTime();
+
+		if (getInput().handleSpecialKeys(t, e, true)) {
+			logger.info("keyPressed_SPECIAL(" + key + ", " + Integer.toHexString(key) + ", " + (char)key + ", sc="+sc+", " +(shift ? ", shift" : "") + (ctrl ? ", ctrl" : "") + (alt ? ", alt" : "") + (meta ? ", meta" : "") + (altGr? ", altGr" : "") + ")");
+		} else {
+			logger.info("keyPressed(" + key + ", " + Integer.toHexString(key) + ", " + (char)key + ", sc="+sc+", " +(shift ? ", shift" : "") + (ctrl ? ", ctrl" : "") + (alt ? ", alt" : "") + (meta ? ", meta" : "") + (altGr? ", altGr" : "") + ")");
+			getInput().sendScancode(t, RDP_KEYPRESS, sc);
 		}
-
 	}
 
 	@Override
 	public void keyReleased(int key) {
-		if (getInput() == null) return;
-		long time = getInput().getTime();
+		if (rdp == null) return;
 
-		if (!getPressedKeys().contains(key)) {
-			this.keyPressed(key, false, false, false, false, false);
+		KeyEvent e = new KeyEvent(this, KeyEvent.KEY_RELEASED, System
+				.currentTimeMillis(), 0, key,
+				KeyEvent.CHAR_UNDEFINED);
+
+		// Some java versions have keys that don't generate keyPresses -
+		// we added the key to the vector in keyPressed so here we check for
+		// it
+		Integer keycode = new Integer(e.getKeyCode());
+		if (!getPressedKeys().contains(keycode)) {
+			keyPressed(key, false, false, false, false, false);
 		}
-		getPressedKeys().removeElement(key);
-		KeyEvent e = new KeyEvent(this, KeyEvent.KEY_RELEASED, System.currentTimeMillis(), 0, key, (char)key);
+
+		getPressedKeys().removeElement(keycode);
+
 		getInput().lastKeyEvent = e;
-		int sc = keyMap.getScancode(e);
-		logger.info("keyReleased(" + key + ", " + Integer.toHexString(key) + ", " + (char)key + ", sc="+sc+") - time=" + time);
+		getInput().modifiersValid = true;
 
-		if (!getInput().handleSpecialKeys(time, e, false)) {
-			getInput().sendScancode(time, RDP_KEYRELEASE, sc);
+		int sc = RDPKeymap.getScancode(key);
+		long t = getInput().getTime();
+
+		if (getInput().handleSpecialKeys(t, e, true)) {
+			logger.info("keyReleased_SPECIAL(" + key + ", " + Integer.toHexString(key) + ", " + (char)key + ", sc="+sc+")");
+		} else {
+			logger.info("keyReleased(" + key + ", " + Integer.toHexString(key) + ", " + (char)key + ", sc="+sc+")");
+			getInput().sendScancode(t, RDP_KEYRELEASE, sc);
 		}
-
 	}
 
 //	@Override
